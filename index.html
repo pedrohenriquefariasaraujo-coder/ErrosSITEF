@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Erros SiTef Completo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 700px;
+        }
+        h1 {
+            color: #0056b3;
+            font-size: 24px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: #0056b3;
+        }
+        button {
+            padding: 12px 25px;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #004085;
+        }
+        .result-card {
+            border-left: 5px solid #0056b3;
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 0 4px 4px 0;
+            margin-top: 15px;
+            display: none;
+        }
+        .result-card h3 {
+            margin-top: 0;
+            color: #0056b3;
+            font-size: 20px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .result-field {
+            margin: 12px 0;
+            line-height: 1.6;
+        }
+        .field-title { 
+            font-weight: bold; 
+            color: #495057; 
+            display: inline-block;
+            width: 160px;
+        }
+        .badge-retentativa {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .badge-sim { background-color: #d4edda; color: #155724; }
+        .badge-nao { background-color: #f8d7da; color: #721c24; }
+        .no-result {
+            color: #721c24;
+            background-color: #f8d7da;
+            padding: 12px;
+            border-radius: 4px;
+            text-align: center;
+            display: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🔍 Buscador de Erros SiTef / Adquirentes</h1>
+    <div class="subtitle">Base de dados completa atualizada</div>
+    
+    <div class="search-box">
+        <input type="text" id="codigoErro" placeholder="Ex: 05, 51, AA, -1..." onkeypress="verificarEnter(event)" autofocus>
+        <button onclick="buscarErro()">Pesquisar</button>
+    </div>
+
+    <div id="resultado" class="result-card">
+        <h3 id="resCodigo">Código: XX</h3>
+        <div class="result-field">
+            <span class="field-title">Descrição:</span> 
+            <span id="resDescricao"></span>
+        </div>
+        <div class="result-field">
+            <span class="field-title">Ação - O que fazer:</span> 
+            <span id="resAcao"></span>
+        </div>
+        <div class="result-field">
+            <span class="field-title">Permite Retentativa?</span> 
+            <span id="resRetentativa"></span>
+        </div>
+    </div>
+
+    <div id="naoEncontrado" class="no-result">
+        ⚠️ Código de erro não localizado na base cadastrada.
+    </div>
+</div>
+
+<script>
+    // BASE DE DADOS COMPILADA (Sua Lista + Erros Estruturais do SiTef)
+    const baseErros = {
+        // --- ERROS GERAIS DO SITEF / INTERNOS ---
+        "-1": { descricao: "Erro na inicialização da biblioteca CliSiTef", acao: "A DLL do SiTef não conseguiu iniciar. Verifique se o arquivo CliSiTef.ini está na pasta correta e configurado com o IP correto do servidor.", retentativa: "Não" },
+        "-5": { descricao: "Falta de memória do sistema ou erro de alocação", acao: "A biblioteca do TEF não conseguiu alocar recursos. Feche outras aplicações ou reinicie o sistema do PDV.", retentativa: "Não" },
+        "117": { descricao: "Carga de Tabelas Expirada ou Requerida", acao: "O PinPad necessita sincronizar os dados das adquirentes. Realize o comando de Carga de Tabelas no menu administrativo do seu caixa.", retentativa: "Não" },
+        
+        // --- SUA TABELA DE ERROS DO DOCUMENTO DE RETORNO LR ---
+        "00": { descricao: "Transação Nacional Autorizada com sucesso", acao: "N/A", retentativa: "Não" }, // [cite: 8, 9, 10, 11]
+        "01": { descricao: "Transação referida pelo emissor", acao: "Oriente o portador a contatar o emissor do cartão", retentativa: "Não" }, // [cite: 12, 13, 14, 15, 16, 17]
+        "02": { descricao: "Transação referida pelo emissor", acao: "Oriente o portador a contatar o emissor do cartão", retentativa: "Não" }, // [cite: 18, 19, 20, 25, 27]
+        "03": { descricao: "Não foi encontrada a transação", acao: "Este erro pode ser: Número de parcelas ultrapassa o permitido, código de segurança inválido, número do cartão inválido ou instabilidade sistêmica na adquirente.", retentativa: "Sim" }, // [cite: 21, 22, 26, 28, 29, 30, 31, 32, 33, 34, 35]
+        "04": { descricao: "Cartão com restrição", acao: "Oriente o portador a contatar o emissor do cartão (Problemas com o cartão)", retentativa: "Não" }, // [cite: 23, 24, 36, 37]
+        "05": { descricao: "Transação não autorizada", acao: "Oriente o portador a contatar o emissor do cartão (Não autorizada pelo emissor)", retentativa: "Não" }, // [cite: 39, 40, 41, 42, 43]
+        "06": { descricao: "Tente novamente", acao: "Problemas ocorridos na transação eletrônica, instabilidade da adquirente.", retentativa: "Sim" }, // [cite: 44, 45, 46, 47, 48, 49, 50, 51]
+        "07": { descricao: "Cartão com restrição", acao: "Oriente o portador a contatar o emissor do cartão (Problemas com o cartão)", retentativa: "Não" }, // [cite: 52]
+        "08": { descricao: "Código de segurança inválido", acao: "O código de segurança foi informado errado no momento da compra", retentativa: "Não" }, // [cite: 52]
+        "09": { descricao: "Transação Cancelada Parcialmente", acao: "Não foi possível efetuar o estorno completo, apenas um cancelamento parcial da venda.", retentativa: "Não" },
+        "10": { descricao: "Não é permitido o envio do cartão", acao: "Adquirente está com os serviços instáveis. Caso o erro continue ocorrendo, entre em contato com nosso suporte técnico", retentativa: "Não" }, // [cite: 52]
+        "11": { descricao: "Internacional Transação Autorizada com sucesso", acao: "N/A", retentativa: "Não" }, // [cite: 52]
+        "12": { descricao: "Transação inválida", acao: "Venda não autorizada pelo banco emissor do cartão. Cartão informado no momento da compra está incorreto", retentativa: "Não" }, // [cite: 52]
+        "13": { descricao: "Valor inválido", acao: "Verifique o valor mínimo de R$5,00 para parcelamento", retentativa: "Não" }, // [cite: 52]
+        "14": { descricao: "Cartão inválido", acao: "N/A", retentativa: "Não" }, // [cite: 52]
+        "15": { descricao: "Emissor inválido", acao: "Emissor sem comunicação.", retentativa: "Não" }, // [cite: 52]
+        "19": { descricao: "Refaça a transação ou tente novamente mais tarde", acao: "Não foi possível processar a transação. Refaça a transação ou tente novamente mais tarde.", retentativa: "Sim" }, // [cite: 52]
+        "21": { descricao: "Cancelamento não efetuado", acao: "Não foi possível processar o cancelamento.", retentativa: "Não" }, // [cite: 52]
+        "22": { descricao: "Parcelamento inválido. Número de parcelas inválidas", acao: "Não foi possível processar a transação. Valor inválido. Refazer a transação confirmando os dados informados.", retentativa: "Não" }, // [cite: 52]
+        "24": { descricao: "Quantidade de parcelas inválido", acao: "Não foi possível processar a transação. Quantidade de parcelas inválido", retentativa: "Não" }, // [cite: 52]
+        "30": { descricao: "Não foi possível processar a transação. Solicite ao portador que reveja os dados e tente novamente.", acao: "Não foi possível processar a transação. Reveja os dados e tente novamente. Se o erro persistir, entre em contato com a loja virtual.", retentativa: "Não" }, // [cite: 53]
+        "38": { descricao: "Limite de tentativas de senha excedido", acao: "O cliente digitou a senha incorretamente muitas vezes consecutivas. Cartão bloqueado.", retentativa: "Não" },
+        "39": { descricao: "Transação não autorizada. Erro no banco emissor.", acao: "Transação não autorizada. Entre em contato com seu banco emissor.", retentativa: "Não" }, // [cite: 53]
+        "40": { descricao: "Cartão perdido (Lost Card)", acao: "O banco emissor reportou o cartão como perdido. Não finalize a operação.", retentativa: "Não" },
+        "41": { descricao: "Cartão com restrição", acao: "Oriente o portador a contatar o emissor do cartão (Problemas com o cartão)", retentativa: "Não" }, // [cite: 53]
+        "42": { descricao: "Cartão roubado (Stolen Card)", acao: "O banco emissor reportou o cartão como roubado/furtado.", retentativa: "Não" },
+        "43": { descricao: "Cartão com restrição", acao: "Oriente o portador a contatar o emissor do cartão (Problemas com o cartão)", retentativa: "Não" }, // [cite: 53]
+        "51": { descricao: "Saldo insuficiente", acao: "Cliente deve entrar em contato com o banco", retentativa: "Sim" }, // [cite: 53]
+        "52": { descricao: "Cartão com dígito de controle inválido", acao: "Não foi possível processar a transação. Cartão com dígito de controle inválido", retentativa: "Não" }, // [cite: 53]
+        "54": { descricao: "Cartão vencido", acao: "Caso os dados informados estejam corretos, cliente deve entrar em contato com o banco para verificar se cartão ainda é válido", retentativa: "Não" }, // [cite: 53]
+        "55": { descricao: "Senha Inválida", acao: "Senha informada está errada", retentativa: "Não" }, // [cite: 53]
+        "56": { descricao: "Cartão sem registro no banco", acao: "O cartão informado não existe ou não foi localizado na base do emissor.", retentativa: "Não" },
+        "57": { descricao: "Transação não permitida ou não autorizada", acao: "Venda não autorizada pelo emissor do cartão, pois o cartão utilizado não faz parte da rede Verified by Visa ou o sistema de prevenção do banco não autorizou a compra. O cliente deve contatar o banco e informar a tentativa de compra no valor de R$XXX.", retentativa: "Não" }, // [cite: 53]
+        "58": { descricao: "Transação não permitida", acao: "N/A", retentativa: "Não" }, // [cite: 54]
+        "59": { descricao: "Suspeita de fraude", acao: "O banco emissor bloqueou preventivamente a compra através de suas ferramentas de segurança e conformidade.", retentativa: "Não" },
+        "60": { descricao: "Transação não autorizada", acao: "Oriente o portador a contatar o emissor do cartão", retentativa: "Não" }, // [cite: 54]
+        "61": { descricao: "Banco emissor Visa indisponível", acao: "Transação não autorizada. Tente novamente. Se o erro persistir, entre em contato com seu banco emissor.", retentativa: "Sim" }, // [cite: 54]
+        "62": { descricao: "Cartão com restrição", acao: "Oriente o portador a contatar o emissor do cartão. Cartão com algum bloqueio para transações online.", retentativa: "Não" }, // [cite: 54]
+        "63": { descricao: "Cartão com restrição", acao: "Oriente o portador a contatar o emissor do cartão. Possível erro de segurança ao tentar processar", retentativa: "Não" }, // [cite: 54]
+        "64": { descricao: "Valor original incorreto", acao: "Erro ao tentar realizar cancelamento/estorno com valor divergente do original da venda.", retentativa: "Não" },
+        "65": { descricao: "Cartão com restrição", acao: "Transação Negada. Oriente o portador a contatar o emissor do cartão (Problemas com o cartão)", retentativa: "Não" }, // [cite: 54]
+        "67": { descricao: "Transação não autorizada", acao: "Transação não autorizada. Cartão bloqueado para compras hoje. Bloqueio pode ter ocorrido por excesso de tentativas inválidas", retentativa: "Sim" }, // [cite: 54]
+        "68": { descricao: "Resposta tardia (Timeout)", acao: "A resposta do emissor demorou demais para voltar. Refaça a operação.", retentativa: "Não" },
+        "70": { descricao: "Transação não autorizada. Limite excedido/sem saldo.", acao: "Transação não autorizada. Entre em contato com seu banco emissor.", retentativa: "Sim" }, // [cite: 54]
+        "74": { descricao: "Transação não autorizada", acao: "Transação não autorizada. A senha está vencida.", retentativa: "Não" }, // [cite: 54]
+        "75": { descricao: "Cartão com restrição", acao: "Motivo provável: Bloqueio de senha. Oriente o portador a contatar o emissor do cartão.", retentativa: "Não" }, // [cite: 54]
+        "76": { descricao: "Tente novamente", acao: "N/A", retentativa: "Sim" }, // [cite: 54]
+        "77": { descricao: "Cancelamento não efetuado", acao: "Cancelamento não efetuado. Não foi localizada a transação original", retentativa: "Não" }, // [cite: 54]
+        "78": { descricao: "Cartão não foi desbloqueado pelo portador", acao: "Cartão bloqueado. Oriente o portador a desbloqueá-lo junto ao emissor do cartão.", retentativa: "Não" }, // [cite: 55]
+        "80": { descricao: "Transação não autorizada", acao: "Transação não autorizada. Data da transação ou data do primeiro pagamento inválida. Refazer confirmando os dados", retentativa: "Não" }, // [cite: 55]
+        "81": { descricao: "Transação negada", acao: "N/A", retentativa: "Não" }, // [cite: 55]
+        "82": { descricao: "Transação inválida", acao: "Provável Código de Segurança Incorreto ou Inválido", retentativa: "Não" }, // [cite: 55]
+        "83": { descricao: "Erro de Criptografia do PinPad / Senha", acao: "Ocorreu um erro técnico na criptografia dos dados de senha. Reinicie o PinPad e tente de novo.", retentativa: "Não" },
+        "85": { descricao: "Transação não permitida. Falha da operação", acao: "Transação não permitida. Houve um erro no processamento. Solicite ao portador que digite novamente os dados do cartão.", retentativa: "Não" }, // [cite: 55]
+        "88": { descricao: "Erro na transação", acao: "Transação não autorizada. Erro na transação. O portador deve tentar novamente e se o erro persistir, entrar em contato com o banco emissor.", retentativa: "Sim" }, // [cite: 55]
+        "90": { descricao: "Transação não permitida. Falha da operação", acao: "Transação não permitida. Houve um erro no processamento. Solicite ao portador que digite novamente os dados do cartão", retentativa: "Não" }, // [cite: 55]
+        "91": { descricao: "Banco indisponível", acao: "Emissor sem comunicação. Oriente cliente a aguardar alguns minutos e tente novamente.", retentativa: "Sim" }, // [cite: 55]
+        "92": { descricao: "Transação não autorizada. Tempo de comunicação excedido", acao: "Transação não autorizada. Tempo de comunicação excedido", retentativa: "Não" }, // [cite: 55]
+        "93": { descricao: "Violação de lei / Restrição de Conta", acao: "Transação negada por restrições legais ou regulamentares atreladas à conta do portador.", retentativa: "Não" },
+        "94": { descricao: "Transação não autorizada", acao: "Transação desfeita pela bandeira", retentativa: "Não" }, // [cite: 55]
+        "96": { descricao: "Tente novamente", acao: "Provável venda abaixo de R$ 1,00. Falha no envio da autorização.", retentativa: "Sim" }, // [cite: 56]
+        "98": { descricao: "Sistema do emissor inativo", acao: "O link de transmissão do banco principal está fora de operação.", retentativa: "Não" },
+        "99": { descricao: "Sistema do banco temporariamente fora de operação", acao: "Tente novamente mais tarde", retentativa: "Não" }, // [cite: 56]
+        "AA": { descricao: "Tempo Excedido", acao: "Tempo excedido na comunicação com o banco emissor. Oriente o portador a tentar novamente, se o erro persistir será necessário que o portador contate seu banco emissor.", retentativa: "Sim" }, // [cite: 56]
+        "AC": { descricao: "Cartão de débito sendo usado com crédito", acao: "Cartão de débito sendo usado com crédito. Portador deve usar um cartão de Crédito", retentativa: "Não" }, // [cite: 56]
+        "AE": { descricao: "Tente Mais Tarde", acao: "Tempo excedido na comunicação com o banco emissor. Oriente o portador a tentar novamente", retentativa: "Sim" }, // [cite: 56]
+        "AF": { descricao: "Transação não permitida. Falha da operação.", acao: "Transação não permitida. Houve um erro no processamento. Solicite ao portador que digite novamente os dados do cartão.", retentativa: "Não" }, // [cite: 56]
+        "AG": { descricao: "Transação não permitida. Falha da operação.", acao: "Houve um erro no processamento. Solicite ao portador que digite novamente os dados do cartão", retentativa: "Não" }, // [cite: 56]
+        "AI": { descricao: "Transação não autorizada. Autenticação não foi realizada.", acao: "Transação não autorizada. Autenticação não foi realizada. O portador não concluiu a autenticação.", retentativa: "Não" }, // [cite: 56]
+        "AV": { descricao: "Transação não autorizada. Dados Inválidos", acao: "Falha na validação dos dados da transação. Oriente o portador a rever os dados e tentar novamente.", retentativa: "Sim" }, // [cite: 56]
+        "BD": { descricao: "Transação não permitida. Falha da operação.", acao: "Transação não permitida. Houve um erro no processamento. Solicite ao portador que digite novamente os dados do cartão.", retentativa: "Não" }, // [cite: 57]
+        "BL": { descricao: "Transação não autorizada. Limite diário excedido.", acao: "Transação não autorizada. Limite diário excedido. Solicite ao portador que entre em contato com seu banco emissor.", retentativa: "Não" }, // [cite: 57]
+        "BM": { descricao: "Transação não autorizada. Cartão Inválido", acao: "Transação não autorizada. Cartão inválido. Pode ser bloqueio do cartão no banco emissor.", retentativa: "Não" }, // [cite: 57]
+        "BN": { descricao: "Transação não autorizada. Cartão ou conta bloqueado.", acao: "Transação não autorizada. O cartão ou a conta do portador está bloqueada. Solicite ao portador que entre em contato com seu banco emissor.", retentativa: "Não" }, // [cite: 57]
+        "BV": { descricao: "Transação não autorizada. Cartão vencido", acao: "Transação não autorizada. Cartão vencido.", retentativa: "Não" }, // [cite: 57]
+        "CF": { descricao: "Transação não autorizada. Falha na validação dos dados.", acao: "Transação não autorizada. Falha na validação dos dados. Solicite ao portador que entre em contato com o banco emissor.", retentativa: "Não" }, // [cite: 57]
+        "EE": { descricao: "Transação não permitida. Valor da parcela inferior ao mínimo permitido.", acao: "Transação não permitida. Valor da parcela inferior ao mínimo permitido. Não é permitido parcelas inferiores a R$ 5,00. Necessário rever cálculo para parcelas.", retentativa: "Não" }, // [cite: 57]
+        "FA": { descricao: "Transação não autorizada", acao: "Transação não autorizada AMEX", retentativa: "Não" }, // [cite: 57]
+        "FC": { descricao: "Transação não autorizada. Ligue Emissor", acao: "Transação não autorizada. Oriente o portador a entrar em contato com o banco emissor.", retentativa: "Não" }, // [cite: 57]
+        "GA": { descricao: "Transação não autorizada", acao: "Referida pela Cielo. Oriente o portador a aguardar alguns instantes e tentar novamente.", retentativa: "Sim" }, // [cite: 57, 60]
+        "GD": { descricao: "Transação não permitida", acao: "Transação não é possível ser processada no estabelecimento. Entre em contato com a administradora do cartão para obter mais detalhes.", retentativa: "Não" }, // [cite: 58, 61, 62, 63]
+        "KA": { descricao: "Transação não permitida. Falha na validação dos dados.", acao: "Transação não permitida. Houve uma falha na validação dos dados. Solicite ao portador que reveja os dados e tente novamente.", retentativa: "Não" }, // [cite: 59, 64, 65, 66]
+        "KE": { descricao: "Transação não autorizada. Falha na validação dos dados.", acao: "Transação não autorizada. Falha na validação dos dados.", retentativa: "Não" }, // [cite: 67, 68, 69, 70]
+        "N7": { descricao: "Transação não autorizada. Código de segurança inválido.", acao: "Transação não autorizada. Código de segurança inválido. Oriente o portador a corrigir os dados e tentar novamente.", retentativa: "Não" } // [cite: 71, 72, 73, 74]
+    };
+
+    function buscarErro() {
+        let codigo = document.getElementById("codigoErro").value.trim().toUpperCase();
+        const cardResultado = document.getElementById("resultado");
+        const divNaoEncontrado = document.getElementById("naoEncontrado");
+
+        // Limpa visualização anterior
+        cardResultado.style.display = "none";
+        divNaoEncontrado.style.display = "none";
+
+        if (codigo === "") {
+            alert("Por favor, digite um código de erro.");
+            return;
+        }
+
+        // Inteligência para adicionar o zero à esquerda caso o usuário digite apenas 1 dígito numérico (Ex: de "5" para "05")
+        if (codigo.length === 1 && !isNaN(codigo)) {
+            codigo = "0" + codigo;
+        }
+
+        // Realiza a consulta na base
+        if (baseErros[codigo]) {
+            const erro = baseErros[codigo];
+            
+            document.getElementById("resCodigo").innerText = "Código de Erro: " + codigo;
+            document.getElementById("resDescricao").innerText = erro.descricao;
+            document.getElementById("resAcao").innerText = erro.acao;
+            
+            // Renderiza o badge Sim/Não para facilitar a identificação visual
+            const bRetentativa = document.getElementById("resRetentativa");
+            if(erro.retentativa === "Sim") {
+                bRetentativa.innerHTML = '<span class="badge-retentativa badge-sim">Sim</span>';
+            } else {
+                bRetentativa.innerHTML = '<span class="badge-retentativa badge-nao">Não</span>';
+            }
+            
+            cardResultado.style.display = "block";
+        } else {
+            divNaoEncontrado.style.display = "block";
+        }
+    }
+
+    // Atalho para pesquisar ao pressionar Enter
+    function verificarEnter(event) {
+        if (event.key === "Enter") {
+            buscarErro();
+        }
+    }
+</script>
+
+</body>
+</html>
